@@ -5345,6 +5345,7 @@ GameObject:
   - component: {fileID: 1866653670}
   - component: {fileID: 1866653671}
   - component: {fileID: 1866653672}
+  - component: {fileID: 1866653673}
   m_Layer: 7
   m_Name: Weapon
   m_TagString: Weapon
@@ -5361,8 +5362,8 @@ Transform:
   m_GameObject: {fileID: 1866653669}
   serializedVersion: 2
   m_LocalRotation: {x: -0.00012311059, y: -0.006725625, z: -0.0047126156, w: -0.9999663}
-  m_LocalPosition: {x: 2.139747, y: 2.0002654, z: 0.015276328}
-  m_LocalScale: {x: 2.7998, y: 3.6227996, z: 1}
+  m_LocalPosition: {x: -0.61, y: 0.41, z: 0.05}
+  m_LocalScale: {x: 1.5683639, y: 0.26554587, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1948763953}
@@ -5374,7 +5375,7 @@ BoxCollider2D:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1866653669}
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Density: 1
   m_Material: {fileID: 0}
@@ -5440,6 +5441,43 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 0
   m_Constraints: 0
+--- !u!70 &1866653673
+CapsuleCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1866653669}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ForceSendLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ForceReceiveLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ContactCaptureLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_CallbackLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_CompositeOperation: 0
+  m_CompositeOrder: 0
+  m_Offset: {x: 0, y: 0}
+  m_Size: {x: 0.5, y: 1}
+  m_Direction: 0
 --- !u!1 &1885749328
 GameObject:
   m_ObjectHideFlags: 0
@@ -5987,6 +6025,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 256699473}
     m_Modifications:
+    - target: {fileID: 1886875770764784958, guid: 63fb6d4a6cc989c4891fdbf0c82c4991, type: 3}
+      propertyPath: m_TagString
+      value: Enemy
+      objectReference: {fileID: 0}
     - target: {fileID: 5491572679380484772, guid: 63fb6d4a6cc989c4891fdbf0c82c4991, type: 3}
       propertyPath: m_LocalPosition.x
       value: -7.06
@@ -6030,6 +6072,30 @@ PrefabInstance:
     - target: {fileID: 5828489508149449675, guid: 63fb6d4a6cc989c4891fdbf0c82c4991, type: 3}
       propertyPath: m_Name
       value: skeleton
+      objectReference: {fileID: 0}
+    - target: {fileID: 6394971762631876291, guid: 63fb6d4a6cc989c4891fdbf0c82c4991, type: 3}
+      propertyPath: m_Size.x
+      value: 0.05074872
+      objectReference: {fileID: 0}
+    - target: {fileID: 6394971762631876291, guid: 63fb6d4a6cc989c4891fdbf0c82c4991, type: 3}
+      propertyPath: m_Size.y
+      value: 0.4393915
+      objectReference: {fileID: 0}
+    - target: {fileID: 6394971762631876291, guid: 63fb6d4a6cc989c4891fdbf0c82c4991, type: 3}
+      propertyPath: m_Offset.x
+      value: -0.005702104
+      objectReference: {fileID: 0}
+    - target: {fileID: 6394971762631876291, guid: 63fb6d4a6cc989c4891fdbf0c82c4991, type: 3}
+      propertyPath: m_Offset.y
+      value: 0.15193321
+      objectReference: {fileID: 0}
+    - target: {fileID: 6394971762631876291, guid: 63fb6d4a6cc989c4891fdbf0c82c4991, type: 3}
+      propertyPath: m_Direction
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6394971762631876291, guid: 63fb6d4a6cc989c4891fdbf0c82c4991, type: 3}
+      propertyPath: m_IsTrigger
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
