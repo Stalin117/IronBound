@@ -1,74 +1,66 @@
 using UnityEngine;
-using System.Collections;   // Necesario para IEnumerator
+using System.Collections;
 using UnityEngine.UI;
+
+// (El enum PowerUpType ahora está en HeroKnight.cs,
+//  pero no hace daño dejarlo aquí también)
+// public enum PowerUpType { ExtraJump, HealthUp }
 
 public class PlayerMovement : MonoBehaviour
 {
-    public float speed = 5f;
-    public float jumpForce = 12f;
+    // --- VARIABLES DE MOVIMIENTO Y SALTO ELIMINADAS ---
+    // (Ya no están aquí para no competir con HeroKnight.cs)
 
     [Header("Health")]
     public int health;
     public int maxHealth = 3;
     public Image healthImg;
     private bool isImmune;
-    public float immunityTime = 1f;  // segundos de inmunidad tras recibir daño
+    public float immunityTime = 1f;
 
-    [Header("Ground Check")]
-    public Transform groundCheck;
-    public float groundCheckRadius = 0.2f;
-    public LayerMask groundLayer;
-    private bool isGrounded;
+    // --- VARIABLES DE DOBLE SALTO ELIMINADAS ---
 
-    private Rigidbody2D rb;
     private Animator anim;
+    // --- AÑADIDO: Referencia al script principal ---
+    private HeroKnight heroKnightScript; 
 
     [Header("UI")]
     public GameObject gameOverImg;
 
     [Header("Muerte por caída")]
-    public float fallDeathY = -10f; // si el jugador cae por debajo de este valor, muere
+    public float fallDeathY = -10f;
 
     public bool isDead;
 
     void Start()
     {
-        rb = GetComponent<Rigidbody2D>();
+        // --- MODIFICADO: Solo obtiene los componentes que necesita ---
         anim = GetComponent<Animator>();
-        health = maxHealth;   // vida inicial
+        heroKnightScript = GetComponent<HeroKnight>(); // Obtiene el script "Cerebro"
+        health = maxHealth;
 
         if (gameOverImg != null)
             gameOverImg.SetActive(false);
 
-        Time.timeScale = 1; // asegurar que el juego no está pausado
+        Time.timeScale = 1;
         isDead = false;
     }
 
+    // --- MODIFICADO: Update() ahora solo maneja la vida y la caída ---
     void Update()
     {
         if (isDead) return;
 
-        // Movimiento lateral
-        float moveX = Input.GetAxisRaw("Horizontal");
-        rb.linearVelocity = new Vector2(moveX * speed, rb.linearVelocity.y);
+        // --- LÓGICA DE MOVIMIENTO Y SALTO ELIMINADA ---
 
-        // Revisar si está en el suelo
-        isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
-
-        // Salto
-        if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
-        {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-        }
-
-        // Actualizar la barra de vida
+        // Actualiza la barra de vida
         if (healthImg != null)
             healthImg.fillAmount = (float)health / maxHealth;
 
         if (health > maxHealth)
             health = maxHealth;
 
-        // 🔥 Muerte por caída
+        // Muerte por caída
         if (transform.position.y < fallDeathY)
         {
             DieByFall();
@@ -83,8 +75,8 @@ public class PlayerMovement : MonoBehaviour
 
         if (health > 0)
         {
-            anim.SetTrigger("Hurt");  // animación de recibir daño
-            StartCoroutine(Immunity()); // activar inmunidad temporal
+            anim.SetTrigger("Hurt"); // Llama a la animación de "Hurt"
+            StartCoroutine(Immunity());
         }
         else
         {
@@ -95,27 +87,66 @@ public class PlayerMovement : MonoBehaviour
     void DieByFall()
     {
         health = 0;
-        anim.SetTrigger("Death");
+        anim.SetTrigger("Death"); // Llama a la animación de "Death"
         Die();
     }
 
     void Die()
     {
         isDead = true;
-        Time.timeScale = 0; // pausar el juego
+        Time.timeScale = 0;
         if (gameOverImg != null)
             gameOverImg.SetActive(true);
     }
 
+    // --- MODIFICADO: OnTriggerEnter2D ---
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        if (collision.CompareTag("Enemy") && !isImmune)
+        // Lógica para RECIBIR daño por choque
+        if (collision.CompareTag("Enemy") || collision.CompareTag("Boss") && !isImmune)
         {
             Enemy enemy = collision.GetComponent<Enemy>();
             int damageToGive = enemy != null ? enemy.damageToGive : 1;
             TakeDamage(damageToGive);
         }
+        // Lógica para RECOGER power-ups
+        else if (collision.CompareTag("PowerUp"))
+        {
+            PowerUp powerUp = collision.GetComponent<PowerUp>();
+            if (powerUp != null)
+            {
+                // Llama a la función correspondiente
+                if (powerUp.type == PowerUpType.ExtraJump)
+                {
+                    // Llama a la función en HeroKnight.cs
+                    heroKnightScript.ActivatePowerUp(powerUp.type);
+                }
+                else if (powerUp.type == PowerUpType.HealthUp)
+                {
+                    // Llama a la función local en este script
+                    ActivatePowerUp(powerUp.type);
+                }
+                
+                // Le dice al power-up que se oculte
+                powerUp.PickUp();
+            }
+        }
     }
+
+    // --- MODIFICADO: ActivatePowerUp ahora solo maneja la vida ---
+    public void ActivatePowerUp(PowerUpType type)
+    {
+        switch (type)
+        {
+            case PowerUpType.HealthUp:
+                health += 1;
+                Debug.Log("¡Vida extra!");
+                break;
+        }
+    }
+
+    // --- CORUTINA DE DOBLE SALTO ELIMINADA ---
+    // (Ahora está en HeroKnight.cs)
 
     IEnumerator Immunity()
     {
