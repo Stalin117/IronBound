@@ -1,90 +1,136 @@
 using UnityEngine;
 using System.Collections;
+using UnityEngine.UI; 
 
 public class BossHealth : MonoBehaviour
 {
-    // Ajusta la vida según la dificultad que quieras
-    public int health = 50; 
+    // --- ¡¡LÓGICA DE VIDA CORREGIDA!! ---
+    [Header("Health")]
+    public int maxHealth = 50; // Pon aquí la vida máxima
+    private int currentHealth; // La vida actual (privada)
+    // ------------------------------------
 
     [Header("Lógica Metroidvania")]
-    // Arrastra aquí la puerta, reja o muro que quieres desbloquear
     public GameObject barrierToUnlock;
-
-    // Tiempo para que se ejecute la animación de muerte
     public float deathDelay = 2f; 
 
+    [Header("UI")]
+    public Image healthBarFill; 
+    
     private Animator anim;
     private bool isDead = false;
+    private bool isDamaged = false; 
+    private Rigidbody2D rb;
 
     void Start()
     {
         anim = GetComponent<Animator>();
+        rb = GetComponent<Rigidbody2D>(); 
         
-        // Asegura que la barrera esté activada al empezar
+        // --- ¡¡INICIALIZADOR DE VIDA AÑADIDO!! ---
+        currentHealth = maxHealth; // ¡Empieza con la vida al máximo!
+        // ----------------------------------------
+        
         if (barrierToUnlock != null)
         {
             barrierToUnlock.SetActive(true);
         }
+
+        if (healthBarFill != null)
+        {
+            healthBarFill.fillAmount = 1f; 
+        }
     }
 
-    // Esta función PÚBLICA será llamada por el script HeroKnight.cs
+    // Esta función detecta tu arma (Tag "Weapon")
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        if (isDead) return; 
+
+        if (collision.CompareTag("Weapon") && !isDamaged)
+        {
+            // (Ajusta '2' al daño de tu arma si quieres)
+            TakeDamage(2); 
+        }
+    }
+
+    // Esta función maneja la lógica de recibir daño
     public void TakeDamage(int damage)
     {
-        // Si ya está muerto, no hagas nada
         if (isDead) return;
 
-        health -= damage;
-        Debug.Log("Boss recibió daño, vida restante: " + health);
+        currentHealth -= damage; // Usa la variable 'currentHealth'
+        isDamaged = true; 
+        Debug.Log("Boss recibió daño, vida restante: " + currentHealth);
 
-        if (health <= 0)
+        if (healthBarFill != null)
+        {
+            // Usa 'currentHealth' y 'maxHealth'
+            healthBarFill.fillAmount = (float)currentHealth / maxHealth;
+        }
+
+        StartCoroutine(Damager()); 
+
+        if (currentHealth <= 0) // Comprueba 'currentHealth'
         {
             Die();
         }
         else if (anim != null)
         {
-            // Activa el trigger "Hurt" en el Animator del Boss
-            anim.SetTrigger("Hit_Boss"); 
+            anim.SetTrigger("Hurt"); 
         }
     }
-
+ 
     void Die()
     {
+        if (isDead) return; 
         isDead = true;
         Debug.Log("¡Boss derrotado!");
 
-        // Desactivamos el collider para que no reciba más daño
+        if (healthBarFill != null)
+        {
+            if (healthBarFill.transform.parent != null)
+                healthBarFill.transform.parent.gameObject.SetActive(false); 
+        }
+
         Collider2D col = GetComponent<Collider2D>();
         if (col != null) col.enabled = false;
 
-        // Activamos la animación de muerte
+        SamuraiBoss_AI aiScript = GetComponent<SamuraiBoss_AI>();
+        if (aiScript != null)
+        {
+            aiScript.enabled = false; 
+        }
+
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+            rb.isKinematic = true; // <-- Esta línea AHORA solo se ejecuta al morir
+        }
+
         if (anim != null)
         {
-            anim.SetTrigger("Dead_Boss");
+            anim.SetTrigger("Death");
         }
-        
-        // Opcional: Desactiva la IA del Boss para que deje de moverse
-        // (Reemplaza 'BossAI' con el nombre de tu script de IA)
-        /*
-        BossAI aiScript = GetComponent<BossAI>();
-        if (aiScript != null) aiScript.enabled = false;
-        */
-
-        // Inicia la corutina para DESBLOQUEAR el camino
+     
         StartCoroutine(UnlockPathAfterDelay());
     }
 
     private IEnumerator UnlockPathAfterDelay()
     {
-        // 1. Espera el tiempo de la animación de muerte
-        yield return new WaitForSeconds(deathDelay);
+        yield return new WaitForSeconds(deathDelay); 
         
-        // 2. Desactiva la barrera (¡Aquí ocurre la magia!)
         if (barrierToUnlock != null)
         {
             barrierToUnlock.SetActive(false);
         }
         
-        // 3. Opcional: Destruye el cuerpo del boss un segundo después
-        Destroy(gameObject, 1f); 
+        Destroy(gameObject); 
+    }
+
+    IEnumerator Damager()
+    {
+        yield return new WaitForSeconds(0.3f); 
+        isDamaged = false;
     }
 }
