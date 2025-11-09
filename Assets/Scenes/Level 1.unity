@@ -847,9 +847,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b6a980916014ce14abe5d8f4eec52370, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BossHealth
-  maxHealth: 0
+  maxHealth: 100
   barrierToUnlock: {fileID: 723109439}
-  deathDelay: 2
+  deathDelay: 0.5
   healthBarFill: {fileID: 633814191}
 --- !u!70 &218810822
 CapsuleCollider2D:
@@ -982,7 +982,7 @@ Transform:
   m_GameObject: {fileID: 218810819}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 89.4, y: 27.35, z: 0}
+  m_LocalPosition: {x: 89.4, y: 27.28, z: 0}
   m_LocalScale: {x: 2.3715332, y: 2.3715332, z: 2.3715332}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1047,6 +1047,8 @@ MonoBehaviour:
   attackCooldown: 1.2
   attackDelay: 0.1
   attackRange: 0.6
+  blockChance: 0.3
+  blockDuration: 1.5
 --- !u!114 &218810829
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1060,7 +1062,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Enemy
   enemyname: SamuraiBoss
-  healthPoints: 50
+  healthPoints: 100
   speed: 2
   knockbackForceX: 2
   knockbackForceY: 2
@@ -2080,7 +2082,7 @@ Transform:
   m_GameObject: {fileID: 519420028}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 27.36, y: 0.15, z: -10}
+  m_LocalPosition: {x: 31.84, y: 1.01, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -2781,7 +2783,7 @@ Transform:
   m_GameObject: {fileID: 619394800}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 27.36, y: 0.2, z: 0}
+  m_LocalPosition: {x: 27.39, y: -1.24, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3185,7 +3187,7 @@ Transform:
   m_GameObject: {fileID: 723109439}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0.55659074, z: -0, w: 0.8307868}
-  m_LocalPosition: {x: 125.13, y: 28.66, z: -45.93}
+  m_LocalPosition: {x: 125.19, y: 28.83, z: -0.34}
   m_LocalScale: {x: 6.906951, y: 9.048105, z: 6.906951}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3205,7 +3207,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2006375311182213501, guid: 51cfbc733ab93f643814ca279c805bb5, type: 3}
       propertyPath: m_LocalScale.y
-      value: 2.2541003
+      value: 1.2237059
       objectReference: {fileID: 0}
     - target: {fileID: 2006375311182213501, guid: 51cfbc733ab93f643814ca279c805bb5, type: 3}
       propertyPath: m_LocalPosition.x
@@ -3213,7 +3215,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2006375311182213501, guid: 51cfbc733ab93f643814ca279c805bb5, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -2.53
+      value: -4.17
       objectReference: {fileID: 0}
     - target: {fileID: 2006375311182213501, guid: 51cfbc733ab93f643814ca279c805bb5, type: 3}
       propertyPath: m_LocalPosition.z
@@ -4762,7 +4764,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1278333396
 Transform:
   m_ObjectHideFlags: 0
@@ -4772,7 +4774,7 @@ Transform:
   m_GameObject: {fileID: 1278333395}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.428, y: -0.455, z: 0}
+  m_LocalPosition: {x: 0.428, y: -0.485, z: 0}
   m_LocalScale: {x: 0.09110762, y: 0.09110762, z: 0.09110762}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -5346,11 +5348,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8413529789942519730, guid: a4b4a6d32bcb19248a754d6602ffc7e4, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 122.02
+      value: 6.53
       objectReference: {fileID: 0}
     - target: {fileID: 8413529789942519730, guid: a4b4a6d32bcb19248a754d6602ffc7e4, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 27.43
+      value: 2.19
       objectReference: {fileID: 0}
     - target: {fileID: 8413529789942519730, guid: a4b4a6d32bcb19248a754d6602ffc7e4, type: 3}
       propertyPath: m_LocalPosition.z
@@ -6880,7 +6882,7 @@ CapsuleCollider2D:
   m_CallbackLayers:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0

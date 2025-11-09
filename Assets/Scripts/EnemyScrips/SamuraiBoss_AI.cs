@@ -1,13 +1,13 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.UI; // ¡Importante! Añadir esto para la UI
+using UnityEngine.UI; 
 
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(SpriteRenderer))]
 [RequireComponent(typeof(Animator))]
 public class SamuraiBoss_AI : MonoBehaviour
 {
-    public enum State { Patrol, Chase, Attack, Idle, Dead }
+    public enum State { Patrol, Chase, Attack, Block, Idle, Dead }
 
     [Header("Referencias (¡Asignar!)")]
     public Enemy enemy;
@@ -15,10 +15,7 @@ public class SamuraiBoss_AI : MonoBehaviour
     public Transform player;
     public LayerMask playerLayer;
     public LayerMask whatIsGround;
-    
-    // --- ¡NUEVA LÍNEA! ---
-    public GameObject healthBarObject; // <-- Arrastra 'BossHealthBar_BG' aquí
-    // --------------------
+    public GameObject healthBarObject; 
 
     [Header("Sensores (¡Asignar!)")]
     public Transform wallCheck;
@@ -34,6 +31,12 @@ public class SamuraiBoss_AI : MonoBehaviour
     public float attackDelay = 0.1f;
     public float attackRange = 0.6f;
 
+    [Header("Blocking")]
+    [Range(0, 1)]
+    public float blockChance = 0.3f; // 30% chance de bloquear
+    public float blockDuration = 1.5f;
+    private bool isBlocking = false;
+
     // Estados Internos
     private Rigidbody2D rb;
     private SpriteRenderer sr;
@@ -46,31 +49,22 @@ public class SamuraiBoss_AI : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         sr = GetComponent<SpriteRenderer>();
-        
         baseScale = transform.localScale; 
         baseScale.x = Mathf.Abs(baseScale.x); 
-
         if (animator == null) animator = GetComponent<Animator>();
         if (enemy == null) enemy = GetComponent<Enemy>();
         if (attackOrigin == null) attackOrigin = transform;
-
         rb.freezeRotation = true;
-        rb.isKinematic = true; 
-        
-        facingRight = (transform.localScale.x > 0); // Asumiendo que base mira a DERECHA
-
-        // --- ¡NUEVA LÍNEA! ---
-        // Oculta la barra de vida al empezar
+        rb.isKinematic = false; 
+        facingRight = (transform.localScale.x > 0);
         if (healthBarObject != null)
             healthBarObject.SetActive(false);
-        // --------------------
     }
 
     void Update()
     {
-        if (currentState == State.Dead) return;
+        if (currentState == State.Dead || isBlocking) return;
         
-        // Si no hay jugador, oculta la barra y no hagas nada
         if (player == null)
         {
             currentState = State.Patrol;
@@ -79,31 +73,41 @@ public class SamuraiBoss_AI : MonoBehaviour
             return;
         }
 
-        // --- Lógica de Estados (Máquina de Estados) ---
         float distToPlayer = Vector2.Distance(transform.position, player.position);
 
-        // --- ¡LÓGICA DE BARRA DE VIDA MODIFICADA! ---
         if (healthBarObject != null)
         {
-            // Si el jugador está DENTRO del radio de detección
             if (distToPlayer <= detectionRadius)
             {
-                // Y la barra está oculta, muéstrala
                 if (!healthBarObject.activeSelf)
                     healthBarObject.SetActive(true);
             }
-            else // Si el jugador está FUERA del radio
+            else 
             {
-                // Y la barra está visible, ocúltala
                 if (healthBarObject.activeSelf)
                     healthBarObject.SetActive(false);
             }
         }
-        // --- FIN DE LA LÓGICA ---
 
         if (distToPlayer <= attackRadius)
         {
-            currentState = State.Attack;
+            if (canAttack)
+            {
+                float randomChoice = Random.Range(0f, 1f);
+                if (randomChoice < blockChance)
+                {
+                    currentState = State.Block;
+                    StartCoroutine(BlockRoutine()); 
+                }
+                else
+                {
+                    currentState = State.Attack;
+                }
+            }
+            else 
+            {
+                currentState = State.Idle;
+            }
         }
         else if (distToPlayer <= detectionRadius)
         {
@@ -114,29 +118,21 @@ public class SamuraiBoss_AI : MonoBehaviour
             currentState = State.Patrol;
         }
 
-        // --- Control del Animator (Sin Cambios) ---
         if (animator != null)
         {
             bool isMoving = (currentState == State.Patrol || currentState == State.Chase);
             if(ParameterExists(animator, "isRunning"))
-            {
                 animator.SetBool("isRunning", isMoving);
-            }
             else if (ParameterExists(animator, "Idle"))
-            {
                 animator.SetBool("Idle", !isMoving);
-            }
+            
+            // Setea el bool de bloqueo (con "I" mayúscula)
+            animator.SetBool("IsBlocking", isBlocking);
         }
     }
 
     void FixedUpdate()
     {
-        // (El resto de FixedUpdate, HandlePatrol, HandleChase, HandleAttack, 
-        //  LookAtPlayer, PerformAttack, SetFacing, FlipFacing, 
-        //  ParameterExists y OnDrawGizmosSelected... 
-        //  ...SE QUEDAN EXACTAMENTE IGUAL QUE EN EL SCRIPT ANTERIOR)
-        //  (Asegúrate de que la lógica de 'rb.MovePosition' esté ahí)
-
         if (currentState == State.Dead) return;
 
         switch (currentState)
@@ -144,9 +140,11 @@ public class SamuraiBoss_AI : MonoBehaviour
             case State.Patrol: HandlePatrol(); break;
             case State.Chase: HandleChase(); break;
             case State.Attack: HandleAttack(); break;
+            case State.Block: HandleBlock(); break; 
             case State.Idle:
             case State.Dead:
             default:
+                rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
                 break;
         }
     }
@@ -154,18 +152,13 @@ public class SamuraiBoss_AI : MonoBehaviour
     void HandlePatrol()
     {
         float spd = (enemy != null) ? enemy.speed * patrolSpeedMultiplier : 1f;
-
         bool pitDetected = (pitCheck != null) ? !Physics2D.OverlapCircle(pitCheck.position, checkRadius, whatIsGround) : false;
         bool wallDetected = (wallCheck != null) ? Physics2D.OverlapCircle(wallCheck.position, checkRadius, whatIsGround) : false;
-
         if (pitDetected || wallDetected)
-        {
             FlipFacing();
-        }
         
         float vx = facingRight ? spd : -spd;
-        float newPosX = rb.position.x + vx * Time.fixedDeltaTime;
-        rb.MovePosition(new Vector2(newPosX, rb.position.y));
+        rb.linearVelocity = new Vector2(vx, rb.linearVelocity.y);
     }
 
     void HandleChase()
@@ -174,12 +167,12 @@ public class SamuraiBoss_AI : MonoBehaviour
         float spd = (enemy != null) ? enemy.speed : 1f;
         LookAtPlayer();
         float vx = (facingRight ? 1f : -1f) * spd;
-        float newPosX = rb.position.x + vx * Time.fixedDeltaTime;
-        rb.MovePosition(new Vector2(newPosX, rb.position.y));
+        rb.linearVelocity = new Vector2(vx, rb.linearVelocity.y);
     }
 
     void HandleAttack()
     {
+        rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
         if (canAttack)
         {
             LookAtPlayer(); 
@@ -187,11 +180,16 @@ public class SamuraiBoss_AI : MonoBehaviour
         }
     }
 
+    void HandleBlock()
+    {
+        rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+        LookAtPlayer();
+    }
+
     void LookAtPlayer()
     {
         if (player == null) return;
         float directionToPlayer = player.position.x - transform.position.x;
-
         if (directionToPlayer > 0.1f) { SetFacing(true); }
         else if (directionToPlayer < -0.1f) { SetFacing(false); }
     }
@@ -199,7 +197,7 @@ public class SamuraiBoss_AI : MonoBehaviour
     IEnumerator PerformAttack()
     {
         canAttack = false;
-        animator?.SetTrigger("Attack");
+        animator?.SetTrigger("Attack"); 
         yield return new WaitForSeconds(attackDelay);
 
         Collider2D[] hits = Physics2D.OverlapCircleAll(attackOrigin.position, attackRange, playerLayer);
@@ -208,20 +206,44 @@ public class SamuraiBoss_AI : MonoBehaviour
             if (c == null) continue;
             var ph = c.GetComponent<PlayerMovement>(); 
             if (ph != null)
-            {
                 ph.TakeDamage(enemy != null ? enemy.damageToGive : 1);
-            }
         }
+        
+        StartCoroutine(ActionCooldownRoutine());
+    }
+
+    // --- ¡CORREGIDO! ---
+    // Esta corutina ahora solo usa el Bool 'isBlocking'
+    IEnumerator BlockRoutine()
+    {
+        isBlocking = true;
+        canAttack = false; 
+        
+        // La línea "SetTrigger("Protection")" ha sido eliminada
+        
+        yield return new WaitForSeconds(blockDuration); 
+        
+        isBlocking = false;
+        currentState = State.Idle; 
+        
+        StartCoroutine(ActionCooldownRoutine());
+    }
+    
+    IEnumerator ActionCooldownRoutine()
+    {
         yield return new WaitForSeconds(attackCooldown);
         canAttack = true;
+    }
+
+    public bool IsBlocking()
+    {
+        return isBlocking;
     }
 
     void SetFacing(bool right)
     {
         if (facingRight == right) return;
         facingRight = right;
-
-        // Lógica para sprites que miran a la DERECHA por defecto
         transform.localScale = new Vector3(
             right ? baseScale.x : -baseScale.x, 
             baseScale.y,

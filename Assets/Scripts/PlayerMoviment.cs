@@ -6,14 +6,13 @@ public class PlayerMovement : MonoBehaviour
 {
     [Header("Health")]
     public int health;
-    public int maxHealth = 3; // ¡Asegúrate de poner 21 aquí en el Inspector!
+    public int maxHealth = 3; 
     public Image healthImg;
     private bool isImmune;
     public float immunityTime = 1f;
 
     private Animator anim;
-    // --- Referencia al script "Cerebro" ---
-    private HeroKnight heroKnightScript; 
+    private HeroKnight heroKnightScript; // Referencia al script de movimiento
 
     [Header("UI")]
     public GameObject gameOverImg;
@@ -28,8 +27,7 @@ public class PlayerMovement : MonoBehaviour
         anim = GetComponent<Animator>();
         heroKnightScript = GetComponent<HeroKnight>(); // Obtiene el script "Cerebro"
         
-        // Si 'maxHealth' es 3 pero en el Inspector pusiste 21, 'health' será 21.
-        // Si 'health' es 0, se setea al 'maxHealth' del Inspector.
+        // Inicializa la vida al valor máximo definido en el Inspector
         if (health <= 0) 
         {
             health = maxHealth;
@@ -60,44 +58,38 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    // --- ¡¡FUNCIÓN TAKEDAMAGE() TOTALMENTE CORREGIDA!! ---
+    // Función pública para recibir daño (llamada por enemigos)
     public void TakeDamage(int damageAmount)
     {
         if (isDead) return;
 
-        // --- 1. COMPROBACIÓN DE BLOQUEO ---
+        // 1. COMPROBACIÓN DE BLOQUEO
         // Lee la variable pública del script HeroKnight
         if (heroKnightScript != null && heroKnightScript.m_blocking)
         {
             Debug.Log("¡Ataque bloqueado!");
-            anim.SetTrigger("Block"); // Re-activa la animación de bloqueo por si acaso
-            return; // ¡No recibe daño!
+            anim.SetTrigger("Block"); 
+            return; // No recibe daño
         }
-        // --- FIN DE LA COMPROBACIÓN ---
 
-
-        // --- 2. COMPROBACIÓN DE I-FRAMES (CORREGIDA) ---
-        // Si no está bloqueando, comprueba si es invencible
+        // 2. COMPROBACIÓN DE I-FRAMES (Invencibilidad)
         if (isImmune) return;
-        // --- FIN DE LA CORRECCIÓN ---
 
-
-        // --- 3. RECIBIR DAÑO ---
+        // 3. RECIBIR DAÑO
         health -= damageAmount;
-        isImmune = true; // Se vuelve invencible AHORA
+        isImmune = true; // Se vuelve invencible
         Debug.Log("Jugador recibe daño. Vida: " + health);
 
         if (health > 0)
         {
-            anim.SetTrigger("Hurt"); // Llama a la animación de "Hurt"
-            StartCoroutine(Immunity()); // Inicia el *temporizador* de inmunidad
+            anim.SetTrigger("Hurt"); // Animación de herido
+            StartCoroutine(Immunity()); // Inicia el temporizador de inmunidad
         }
         else
         {
             Die();
         }
     }
-    // --- FIN DE LA FUNCIÓN TAKEDAMAGE ---
 
     void DieByFall()
     {
@@ -109,7 +101,7 @@ public class PlayerMovement : MonoBehaviour
     void Die()
     {
         isDead = true;
-        Time.timeScale = 0;
+        Time.timeScale = 0; // Pausa el juego
         if (gameOverImg != null)
             gameOverImg.SetActive(true);
         
@@ -127,7 +119,7 @@ public class PlayerMovement : MonoBehaviour
             TakeDamage(1); // O puedes leer 'enemy.damageToGive'
         }
         
-        // Lógica de PowerUp (Sin Cambios)
+        // Lógica de PowerUp
         else if (collision.CompareTag("PowerUp"))
         {
             PowerUp powerUp = collision.GetComponent<PowerUp>();
@@ -153,13 +145,13 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    // Función de PowerUp (Sin Cambios)
+    // Función de PowerUp de Curación
     public bool ActivatePowerUp(PowerUpType type, int amountToHeal) 
     {
         switch (type)
         {
             case PowerUpType.HealthUp:
-                if (health < maxHealth) 
+                if (health < maxHealth) // ¿Tiene espacio para curarse?
                 {
                     health += amountToHeal; 
                     if (health > maxHealth)
@@ -167,18 +159,18 @@ public class PlayerMovement : MonoBehaviour
                         health = maxHealth;
                     }
                     Debug.Log("¡Vida recuperada! Salud actual: " + health);
-                    return true; 
+                    return true; // Devuelve VERDADERO (se usó el item)
                 }
                 else
                 {
                     Debug.Log("¡Vida ya está al máximo!");
-                    return false; 
+                    return false; // Devuelve FALSO (no se usó el item)
                 }
         }
         return false; 
     }
 
-    // Corutina de Inmunidad (Sin Cambios)
+    // Corutina de Inmunidad
     IEnumerator Immunity()
     {
         yield return new WaitForSeconds(immunityTime);

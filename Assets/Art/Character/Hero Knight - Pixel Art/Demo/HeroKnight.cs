@@ -6,15 +6,16 @@ public enum PowerUpType { ExtraJump, HealthUp }
 
 public class HeroKnight : MonoBehaviour {
 
+    [Header("Movement")]
     [SerializeField] float      m_speed = 4.0f;
     [SerializeField] float      m_jumpForce = 7.5f;
     [SerializeField] float      m_rollForce = 6.0f;
+    
+    [Header("Combat")]
+    [SerializeField] float      m_attackCooldown = 0.5f; // ¡NUEVO! Edita esto en el Inspector
     [SerializeField] bool       m_noBlood = false;
     [SerializeField] GameObject m_slideDust;
     
-    // --- VARIABLES DE 'Combat' ELIMINADAS ---
-    // (Ya no se necesitan, el scale volteará el objeto 'Weapon' automáticamente)
-
     [Header("Physics")] 
     [SerializeField] BoxCollider2D m_feetCollider; // Collider con 'HighFriction'
 
@@ -43,7 +44,7 @@ public class HeroKnight : MonoBehaviour {
     private float               m_rollCurrentTime;
 
     public bool m_blocking = false; 
-    private Vector3 m_baseScale; // <-- NUEVO: Para guardar la escala original
+    private Vector3 m_baseScale; 
 
     void Start ()
     {
@@ -55,8 +56,7 @@ public class HeroKnight : MonoBehaviour {
         m_wallSensorL1 = transform.Find("WallSensor_L1").GetComponent<Sensor_HeroKnight>();
         m_wallSensorL2 = transform.Find("WallSensor_L2").GetComponent<Sensor_HeroKnight>();
 
-        // --- LÓGICA DE 'Start' CORREGIDA ---
-        m_baseScale = transform.localScale; // Guarda la escala (ej: 1.1131, 1.1131)
+        m_baseScale = transform.localScale; 
         m_facingDirection = (transform.localScale.x > 0) ? 1 : -1;
     }
 
@@ -69,9 +69,8 @@ public class HeroKnight : MonoBehaviour {
 
         if(m_rollCurrentTime > m_rollDuration)
             m_rolling = false;
-
         
-        // Lógica de Suelo (Detecta el ESTADO actual)
+        // Lógica de Suelo
         if (m_groundSensor.State())
         {
             if (!m_grounded)
@@ -81,7 +80,7 @@ public class HeroKnight : MonoBehaviour {
                 m_jumpCount = 0;
             }
         }
-        else // Si el sensor NO detecta suelo
+        else // Si está en el aire
         {
             if (m_grounded)
             {
@@ -90,50 +89,46 @@ public class HeroKnight : MonoBehaviour {
             }
         }
 
-        // Activar/Desactivar el collider de agarre (pies) CADA FRAME
+        // Activar/Desactivar el collider de agarre (pies)
         if (m_feetCollider != null)
         {
             if (m_grounded)
-                m_feetCollider.enabled = true; // Agarre activado
+                m_feetCollider.enabled = true;
             else 
-                m_feetCollider.enabled = false; // Agarre desactivado
+                m_feetCollider.enabled = false;
         }
-
 
         float inputX = Input.GetAxis("Horizontal");
 
-        // --- Lógica de Giro (¡REEMPLAZADA!) ---
+        // Lógica de Giro
         if (inputX > 0.1f)
-        {
-            SetFacing(1); // Llama a la nueva función de giro
-        }
+            SetFacing(1); 
         else if (inputX < -0.1f)
+            SetFacing(-1);
+        
+        // Detección de Paredes (Lógica Corregida)
+        bool wallOnRight;
+        bool wallOnLeft;
+        if (m_facingDirection == 1) // Mirando Derecha
         {
-            SetFacing(-1); // Llama a la nueva función de giro
+            wallOnRight = (m_wallSensorR1.State() || m_wallSensorR2.State());
+            wallOnLeft = (m_wallSensorL1.State() || m_wallSensorL2.State());
         }
-        
-        
-        // --- Lógica de Paredes (¡SIMPLIFICADA!) ---
-        // Comprueba los sensores del lado al que estás mirando
-        bool wallInFront = (m_facingDirection == 1) ? 
-                            (m_wallSensorR1.State() || m_wallSensorR2.State()) : 
-                            (m_wallSensorL1.State() || m_wallSensorL2.State());
-
+        else // Mirando Izquierda
+        {
+            wallOnRight = (m_wallSensorL1.State() || m_wallSensorL2.State()); // Sensores L están a la derecha
+            wallOnLeft = (m_wallSensorR1.State() || m_wallSensorR2.State()); // Sensores R están a la izquierda
+        }
 
         // Lógica de Movimiento
         if (!m_rolling && !m_blocking)
         {
             float currentVerticalVelocity = m_body2d.linearVelocity.y;
-            
-            // CASO 1: Estás empujando contra una pared (adelante)
-            if ( (inputX > 0.1f && m_facingDirection == 1 && wallInFront) || (inputX < -0.1f && m_facingDirection == -1 && wallInFront) )
+            if ( (inputX > 0.1f && wallOnRight) || (inputX < -0.1f && wallOnLeft) )
             {
-                if (currentVerticalVelocity > 0)
-                    currentVerticalVelocity = 0; // "Mata" el salto si chocas subiendo
-                
+                if (currentVerticalVelocity > 0) currentVerticalVelocity = 0;
                 m_body2d.linearVelocity = new Vector2(0, currentVerticalVelocity);
             }
-            // CASO 2: No hay pared
             else
             {
                 m_body2d.linearVelocity = new Vector2(inputX * m_speed, currentVerticalVelocity);
@@ -143,33 +138,42 @@ public class HeroKnight : MonoBehaviour {
         {
             m_body2d.linearVelocity = new Vector2(0, m_body2d.linearVelocity.y);
         }
-
         
         m_animator.SetFloat("AirSpeedY", m_body2d.linearVelocity.y);
-        // La lógica de WallSlide ahora usa 'wallInFront'
-        m_isWallSliding = wallInFront && !m_grounded; 
+        m_isWallSliding = (wallOnRight || wallOnLeft) && !m_grounded;
         m_animator.SetBool("WallSlide", m_isWallSliding);
-
         
-        // --- Inputs (sin cambios) ---
-        if (Input.GetKeyDown("e") && !m_rolling)
+        // --- Inputs ---
+
+        if (Input.GetKeyDown("e") && !m_rolling) // Test Muerte
         {
             m_animator.SetBool("noBlood", m_noBlood);
             m_animator.SetTrigger("Death");
         }
-        else if (Input.GetKeyDown("q") && !m_rolling)
+        else if (Input.GetKeyDown("q") && !m_rolling) // Test Herido
             m_animator.SetTrigger("Hurt");
-        else if(Input.GetMouseButtonDown(0) && m_timeSinceAttack > 0.25f && !m_rolling)
+            
+        // --- LÓGICA DE ATAQUE (CORREGIDA) ---
+        else if(Input.GetMouseButtonDown(0) && m_timeSinceAttack > m_attackCooldown && !m_rolling)
         {
             m_currentAttack++;
+            
+            // Reinicia el combo si ha pasado mucho tiempo
+            if (m_timeSinceAttack > 1.0f) 
+                m_currentAttack = 1;
+
+            // Limita el combo a 3 ataques
             if (m_currentAttack > 3)
                 m_currentAttack = 1;
-            if (m_timeSinceAttack > 1.0f)
-                m_currentAttack = 1;
+
             m_animator.SetTrigger("Attack" + m_currentAttack);
+            
+            // Reinicia el temporizador de ataque
             m_timeSinceAttack = 0.0f;
         }
-        else if (Input.GetMouseButtonDown(1) && !m_rolling && m_grounded)
+        // --- FIN DE LÓGICA DE ATAQUE ---
+
+        else if (Input.GetMouseButtonDown(1) && !m_rolling && m_grounded) // Bloqueo
         {
             m_animator.SetTrigger("Block");
             m_animator.SetBool("IdleBlock", true);
@@ -180,13 +184,13 @@ public class HeroKnight : MonoBehaviour {
             m_animator.SetBool("IdleBlock", false);
             m_blocking = false;
         }
-        else if (Input.GetKeyDown("left shift") && !m_rolling && !m_isWallSliding)
+        else if (Input.GetKeyDown("left shift") && !m_rolling && !m_isWallSliding) // Rodar
         {
             m_rolling = true;
             m_animator.SetTrigger("Roll");
             m_body2d.linearVelocity = new Vector2(m_facingDirection * m_rollForce, m_body2d.linearVelocity.y);
         }
-        else if (Input.GetKeyDown("space") && !m_rolling)
+        else if (Input.GetKeyDown("space") && !m_rolling) // Salto
         {
             if (m_jumpCount < m_maxJumps)
             {
@@ -203,12 +207,12 @@ public class HeroKnight : MonoBehaviour {
                 }
             }
         }
-        else if (Mathf.Abs(inputX) > Mathf.Epsilon && !m_blocking)
+        else if (Mathf.Abs(inputX) > Mathf.Epsilon && !m_blocking) // Correr
         {
             m_delayToIdle = 0.05f;
             m_animator.SetInteger("AnimState", 1);
         }
-        else if (!m_blocking)
+        else if (!m_blocking) // Idle
         {
             m_delayToIdle -= Time.deltaTime;
                 if(m_delayToIdle < 0)
@@ -216,26 +220,22 @@ public class HeroKnight : MonoBehaviour {
         }
     }
 
-    // --- ¡NUEVA FUNCIÓN DE GIRO! ---
+    // Función de Giro
     void SetFacing(int direction)
     {
-        // Si ya estamos mirando en esa dirección, no hacer nada
         if (m_facingDirection == direction) return;
-        
         m_facingDirection = direction;
-        
-        // Voltea el scale del GameObject principal
         transform.localScale = new Vector3(
-            m_baseScale.x * direction, // Voltea X
+            m_baseScale.x * direction,
             m_baseScale.y,
             m_baseScale.z
         );
     }
 
-    // Eventos de Animación (Sin Cambios)
+    // Eventos de Animación
     void AE_SlideDust() { }
 
-    // Lógica de Power-Up (Sin Cambios)
+    // Lógica de Power-Up
     public void ActivatePowerUp(PowerUpType type)
     {
         if (type == PowerUpType.ExtraJump)
