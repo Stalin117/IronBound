@@ -2,27 +2,17 @@ using UnityEngine;
 using System.Collections;
 using UnityEngine.UI;
 
-// (El enum PowerUpType ahora está en HeroKnight.cs,
-//  pero no hace daño dejarlo aquí también)
-// public enum PowerUpType { ExtraJump, HealthUp }
-
 public class PlayerMovement : MonoBehaviour
 {
-    // --- VARIABLES DE MOVIMIENTO Y SALTO ELIMINADAS ---
-    // (Ya no están aquí para no competir con HeroKnight.cs)
-
     [Header("Health")]
     public int health;
-    public int maxHealth = 3;
+    public int maxHealth = 3; 
     public Image healthImg;
     private bool isImmune;
     public float immunityTime = 1f;
 
-    // --- VARIABLES DE DOBLE SALTO ELIMINADAS ---
-
     private Animator anim;
-    // --- AÑADIDO: Referencia al script principal ---
-    private HeroKnight heroKnightScript; 
+    private HeroKnight heroKnightScript; // Referencia al script de movimiento
 
     [Header("UI")]
     public GameObject gameOverImg;
@@ -34,10 +24,14 @@ public class PlayerMovement : MonoBehaviour
 
     void Start()
     {
-        // --- MODIFICADO: Solo obtiene los componentes que necesita ---
         anim = GetComponent<Animator>();
         heroKnightScript = GetComponent<HeroKnight>(); // Obtiene el script "Cerebro"
-        health = maxHealth;
+        
+        // Inicializa la vida al valor máximo definido en el Inspector
+        if (health <= 0) 
+        {
+            health = maxHealth;
+        }
 
         if (gameOverImg != null)
             gameOverImg.SetActive(false);
@@ -46,12 +40,9 @@ public class PlayerMovement : MonoBehaviour
         isDead = false;
     }
 
-    // --- MODIFICADO: Update() ahora solo maneja la vida y la caída ---
     void Update()
     {
         if (isDead) return;
-
-        // --- LÓGICA DE MOVIMIENTO Y SALTO ELIMINADA ---
 
         // Actualiza la barra de vida
         if (healthImg != null)
@@ -67,16 +58,32 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    // Función pública para recibir daño (llamada por enemigos)
     public void TakeDamage(int damageAmount)
     {
         if (isDead) return;
 
+        // 1. COMPROBACIÓN DE BLOQUEO
+        // Lee la variable pública del script HeroKnight
+        if (heroKnightScript != null && heroKnightScript.m_blocking)
+        {
+            Debug.Log("¡Ataque bloqueado!");
+            anim.SetTrigger("Block"); 
+            return; // No recibe daño
+        }
+
+        // 2. COMPROBACIÓN DE I-FRAMES (Invencibilidad)
+        if (isImmune) return;
+
+        // 3. RECIBIR DAÑO
         health -= damageAmount;
+        isImmune = true; // Se vuelve invencible
+        Debug.Log("Jugador recibe daño. Vida: " + health);
 
         if (health > 0)
         {
-            anim.SetTrigger("Hurt"); // Llama a la animación de "Hurt"
-            StartCoroutine(Immunity());
+            anim.SetTrigger("Hurt"); // Animación de herido
+            StartCoroutine(Immunity()); // Inicia el temporizador de inmunidad
         }
         else
         {
@@ -87,70 +94,85 @@ public class PlayerMovement : MonoBehaviour
     void DieByFall()
     {
         health = 0;
-        anim.SetTrigger("Death"); // Llama a la animación de "Death"
+        anim.SetTrigger("Death"); 
         Die();
     }
 
     void Die()
     {
         isDead = true;
-        Time.timeScale = 0;
+        Time.timeScale = 0; // Pausa el juego
         if (gameOverImg != null)
             gameOverImg.SetActive(true);
+        
+        // Desactiva el control del jugador
+        if (heroKnightScript != null)
+            heroKnightScript.enabled = false;
     }
 
-    // --- MODIFICADO: OnTriggerEnter2D ---
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        // Lógica para RECIBIR daño por choque
-        if (collision.CompareTag("Enemy") || collision.CompareTag("Boss") && !isImmune)
+        // Lógica para RECIBIR daño por choque (TOCAR al enemigo)
+        if (collision.CompareTag("Enemy") && !isImmune)
         {
-            Enemy enemy = collision.GetComponent<Enemy>();
-            int damageToGive = enemy != null ? enemy.damageToGive : 1;
-            TakeDamage(damageToGive);
+            // Esta función AHORA comprobará si estás bloqueando
+            TakeDamage(1); // O puedes leer 'enemy.damageToGive'
         }
-        // Lógica para RECOGER power-ups
+        
+        // Lógica de PowerUp
         else if (collision.CompareTag("PowerUp"))
         {
             PowerUp powerUp = collision.GetComponent<PowerUp>();
             if (powerUp != null)
             {
-                // Llama a la función correspondiente
+                bool pickedUp = false; 
+
                 if (powerUp.type == PowerUpType.ExtraJump)
                 {
-                    // Llama a la función en HeroKnight.cs
                     heroKnightScript.ActivatePowerUp(powerUp.type);
+                    pickedUp = true; 
                 }
                 else if (powerUp.type == PowerUpType.HealthUp)
                 {
-                    // Llama a la función local en este script
-                    ActivatePowerUp(powerUp.type);
+                    pickedUp = ActivatePowerUp(powerUp.type, powerUp.healAmount); 
                 }
                 
-                // Le dice al power-up que se oculte
-                powerUp.PickUp();
+                if (pickedUp)
+                {
+                    powerUp.PickUp();
+                }
             }
         }
     }
 
-    // --- MODIFICADO: ActivatePowerUp ahora solo maneja la vida ---
-    public void ActivatePowerUp(PowerUpType type)
+    // Función de PowerUp de Curación
+    public bool ActivatePowerUp(PowerUpType type, int amountToHeal) 
     {
         switch (type)
         {
             case PowerUpType.HealthUp:
-                health += 1;
-                Debug.Log("¡Vida extra!");
-                break;
+                if (health < maxHealth) // ¿Tiene espacio para curarse?
+                {
+                    health += amountToHeal; 
+                    if (health > maxHealth)
+                    {
+                        health = maxHealth;
+                    }
+                    Debug.Log("¡Vida recuperada! Salud actual: " + health);
+                    return true; // Devuelve VERDADERO (se usó el item)
+                }
+                else
+                {
+                    Debug.Log("¡Vida ya está al máximo!");
+                    return false; // Devuelve FALSO (no se usó el item)
+                }
         }
+        return false; 
     }
 
-    // --- CORUTINA DE DOBLE SALTO ELIMINADA ---
-    // (Ahora está en HeroKnight.cs)
-
+    // Corutina de Inmunidad
     IEnumerator Immunity()
     {
-        isImmune = true;
         yield return new WaitForSeconds(immunityTime);
         isImmune = false;
     }

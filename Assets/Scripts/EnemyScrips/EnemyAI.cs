@@ -1,156 +1,259 @@
 using UnityEngine;
+using System.Collections;
 
+[RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(SpriteRenderer))]
+[RequireComponent(typeof(Animator))]
 public class EnemyAI : MonoBehaviour
 {
-    // --- Estados de la IA ---
-    private enum AIState { Patrolling, Chasing, Attacking }
-    [SerializeField] private AIState currentState = AIState.Patrolling;
+    // ¡ESTE SCRIPT MANEJA EL MOVIMIENTO Y EL ATAQUE!
+    // Tu script "EnemyHealth.cs" maneja RECIBIR DAÑO.
 
-    // --- Referencias a Componentes ---
-    private Enemy enemyStats;
-    private EnemyMovement enemyMovement;
+    public enum State { Patrol, Chase, Attack, Idle }
+    
+    [Header("Referencias (¡Asignar!)")]
+    public Enemy enemy;           // El script "Enemy" con las stats
+    public Animator animator;         // El "Animator" del esqueleto
+    public Transform player;          // Arrastra tu "HeroKnight" aquí
+    public LayerMask playerLayer;     // Asigna la capa "Player"
+    public LayerMask whatIsGround;    // Asigna la capa "Ground"
+
+    [Header("Sensores (¡Asignar!)")]
+    public Transform wallCheck;
+    public Transform pitCheck;
+    public Transform attackOrigin;    // Arrastra el "AttackPoint" del esqueleto
+    public float checkRadius = 0.12f;
+
+    [Header("Valores de Comportamiento")]
+    public float detectionRadius = 6f;  // Rango Amarillo
+    public float attackRadius = 1f;     // Rango Rojo
+    public float patrolSpeedMultiplier = 0.6f;
+    public float attackCooldown = 1.2f; // Tiempo entre ataques
+    public float attackDelay = 0.1f;    // Espera para sincronizar anim
+    public float attackRange = 0.6f;    // Rango del golpe (OverlapCircle)
+
+    // Estados Internos
     private Rigidbody2D rb;
-    private Animator anim;
-    private Transform player;
+    private SpriteRenderer sr;
+    private Vector3 baseScale; // <--- AÑADE ESTA LÍNEA
+    private State currentState = State.Patrol;
+    private bool canAttack = true;
+    
+    // Asumimos que el sprite original mira a la DERECHA
+    // por lo tanto, 'facingRight = true' es el estado inicial
+    private bool facingRight = true; 
 
-    // --- Detección del Jugador ---
-    [Header("Detección")]
-    [SerializeField] private LayerMask playerLayer;
-    [SerializeField] private float detectionRange = 8f; // Rango para empezar a perseguir
-    [SerializeField] private float attackRange = 1.5f;  // Rango para atacar
-
-    // --- Lógica de Ataque ---
-    [Header("Ataque")]
-    [SerializeField] private Transform attackPoint; // Un objeto hijo que marca de dónde sale el ataque
-    [SerializeField] private float attackRadius = 0.8f;
-    [SerializeField] private float attackCooldown = 2f; // Tiempo de espera entre ataques
-    private float currentCooldown = 0f;
-    private bool isAttacking = false;
-
-    void Awake()
+    void Start()
     {
-        // Obtenemos todos los componentes necesarios
-        enemyStats = GetComponent<Enemy>();
-        enemyMovement = GetComponent<EnemyMovement>();
         rb = GetComponent<Rigidbody2D>();
-        anim = GetComponent<Animator>();
+        sr = GetComponent<SpriteRenderer>();
+        // boxCollider = GetComponent<BoxCollider2D>(); // <--- ELIMINA ESTA LÍNEA
 
-        // Buscamos al jugador por su etiqueta "Player"
-        GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
-        if (playerObject != null)
+        // --- AÑADE ESTAS 2 LÍNEAS AQUÍ ---
+        baseScale = transform.localScale; 
+        baseScale.x = Mathf.Abs(baseScale.x); 
+        // ---------------------------------
+        
+        if (animator == null) animator = GetComponent<Animator>();
+        if (enemy == null) enemy = GetComponent<Enemy>();
+        if (attackOrigin == null) attackOrigin = transform;
+
+        rb.freezeRotation = true;
+        
+        // Busca al jugador por Tag si no está asignado
+        if (player == null) 
         {
-            player = playerObject.transform;
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null) 
+            {
+                player = playerObj.transform;
+            }
+            else
+            {
+                Debug.LogError("¡No se encontró al jugador! Asegúrate de que 'HeroKnight' tenga el Tag 'Player'.");
+            }
         }
+
+        // --- REEMPLAZA TU LÍNEA 'facingRight' ANTIGUA POR ESTA ---
+        // Sincroniza la dirección inicial basándose en el 'scale'
+        facingRight = (transform.localScale.x > 0);
+        // -----------------------------------------------------
     }
 
     void Update()
     {
-        if (player == null || isAttacking) return; // Si no hay jugador o está atacando, no hace nada
-
-        if (currentCooldown > 0)
+        // El script EnemyHealth se encarga de la muerte
+        
+        if (player == null) 
         {
-            currentCooldown -= Time.deltaTime;
+            currentState = State.Patrol;
+            return;
         }
 
-        // --- Máquina de Estados ---
-        switch (currentState)
+        // --- Lógica de Estados ---
+        float distToPlayer = Vector2.Distance(transform.position, player.position);
+
+        if (distToPlayer <= attackRadius) 
         {
-            case AIState.Patrolling:
-                Patrol();
+            currentState = State.Attack;
+        } 
+        else if (distToPlayer <= detectionRadius) 
+        {
+            currentState = State.Chase;
+        } 
+        else 
+        {
+            currentState = State.Patrol;
+        }
+        
+        // --- Control del Animator (Usa "Idle") ---
+        if (animator != null) 
+        {
+            bool isMoving = (currentState == State.Patrol || currentState == State.Chase);
+            animator.SetBool("Idle", !isMoving);
+        }
+    }
+
+    void FixedUpdate()
+    {
+        // Ejecuta la lógica del estado actual
+        switch (currentState) 
+        {
+            case State.Patrol:
+                HandlePatrol();
                 break;
-            case AIState.Chasing:
-                Chase();
+            case State.Chase:
+                HandleChase();
                 break;
-            case AIState.Attacking:
-                Attack();
+            case State.Attack:
+                HandleAttack();
+                break;
+            case State.Idle:
+            default:
+                rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
                 break;
         }
     }
 
-    private void Patrol()
+    // --- LÓGICA DE ESTADOS ---
+
+    void HandlePatrol()
     {
-        enemyMovement.enabled = true;
-        if (Vector2.Distance(transform.position, player.position) < detectionRange)
+        float spd = (enemy != null) ? enemy.speed * patrolSpeedMultiplier : 1f;
+
+        // Comprueba si hay un abismo o una pared
+        bool pitDetected = (pitCheck != null) ? !Physics2D.OverlapCircle(pitCheck.position, checkRadius, whatIsGround) : false;
+        bool wallDetected = (wallCheck != null) ? Physics2D.OverlapCircle(wallCheck.position, checkRadius, whatIsGround) : false;
+
+        if (pitDetected || wallDetected) 
         {
-            currentState = AIState.Chasing;
+            FlipFacing();
         }
+
+        // Aplica velocidad
+        float vx = facingRight ? spd : -spd;
+        rb.linearVelocity = new Vector2(vx, rb.linearVelocity.y);
     }
 
-    private void Chase()
+    void HandleChase()
     {
-        enemyMovement.enabled = false;
-        float distanceToPlayer = Vector2.Distance(transform.position, player.position);
-
-        if (distanceToPlayer > attackRange)
-        {
-            Vector2 direction = (player.position - transform.position).normalized;
-            rb.linearVelocity = new Vector2(direction.x * enemyStats.speed, rb.linearVelocity.y);
-            FlipTowardsPlayer();
-        }
-        else if (currentCooldown <= 0)
-        {
-            currentState = AIState.Attacking;
-        }
-
-        if (distanceToPlayer > detectionRange)
-        {
-            currentState = AIState.Patrolling;
-            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
-        }
+        if (player == null) { rb.linearVelocity = Vector2.zero; return; }
+        float spd = (enemy != null) ? enemy.speed : 1f;
+        
+        LookAtPlayer(); // Gira hacia el jugador
+        
+        // Aplica velocidad
+        rb.linearVelocity = new Vector2((facingRight ? 1f : -1f) * spd, rb.linearVelocity.y);
     }
 
-    private void Attack()
+    void HandleAttack()
     {
-        isAttacking = true;
-        rb.linearVelocity = Vector2.zero;
-        anim.SetTrigger("Attack"); // Lanza la animación de ataque
-        currentCooldown = attackCooldown;
+        rb.linearVelocity = new Vector2(0, rb.linearVelocity.y); // Detenerse
+
+        // *** ↓↓↓ CORRECCIÓN 2 AQUÍ ↓↓↓ ***
+        // Solo mira al jugador UNA VEZ, cuando decide atacar.
+        if (canAttack) 
+        {
+            LookAtPlayer(); // MIRA AL JUGADOR
+            StartCoroutine(PerformAttack());
+        }
     }
     
-    // MÉTODO LLAMADO DESDE LA ANIMACIÓN DE ATAQUE
-    public void PerformAttack()
-    {
-        Collider2D[] hitPlayers = Physics2D.OverlapCircleAll(attackPoint.position, attackRadius, playerLayer);
+    // --- FUNCIONES DE AYUDA ---
 
-        foreach (Collider2D playerHit in hitPlayers)
+    // Gira al enemigo para mirar al jugador (con "zona muerta")
+    void LookAtPlayer()
+    {
+        if (player == null) return;
+        
+        float directionToPlayer = player.position.x - transform.position.x;
+
+        if (directionToPlayer > 0.1f) // Player está a la derecha
         {
-            // Busca el script PlayerMovement en el objeto golpeado y le hace daño
-            PlayerMovement playerScript = playerHit.GetComponent<PlayerMovement>();
-            if (playerScript != null)
+            SetFacing(true); // Mirar derecha
+        } 
+        else if (directionToPlayer < -0.1f) // Player está a la izquierda
+        {
+            SetFacing(false); // Mirar izquierda
+        }
+    }
+
+    // Ejecuta el ataque (animación y daño al jugador)
+    IEnumerator PerformAttack()
+    {
+        canAttack = false;
+        animator?.SetTrigger("Attack"); // Llama al Trigger "Attack" del Animator
+        
+        yield return new WaitForSeconds(attackDelay); 
+
+        // Detecta al jugador en el punto de ataque
+        Collider2D[] hits = Physics2D.OverlapCircleAll(attackOrigin.position, attackRange, playerLayer);
+        foreach (var c in hits)
+        {
+            if (c == null) continue;
+            // Busca el script de vida del Héroe
+            // NOTA: Tu script original buscaba 'PlayerMovement', asegúrate de que ese script tenga 'TakeDamage'
+            var ph = c.GetComponent<PlayerMovement>(); // Asegúrate que este script exista en tu jugador
+            if (ph != null)
             {
-                playerScript.TakeDamage(enemyStats.damageToGive);
+                // Le hace daño al jugador
+                ph.TakeDamage(enemy != null ? enemy.damageToGive : 1);
             }
         }
+        
+        yield return new WaitForSeconds(attackCooldown);
+        canAttack = true;
     }
 
-    // MÉTODO LLAMADO AL FINAL DE LA ANIMACIÓN DE ATAQUE
-    public void FinishAttack()
+    // Gira el sprite
+    void SetFacing(bool right)
     {
-        isAttacking = false;
-        currentState = AIState.Chasing; // Vuelve a perseguir
+        if (facingRight == right) return;
+        facingRight = right;
+
+        // Voltea el scale usando los valores guardados
+        transform.localScale = new Vector3(
+            right ? baseScale.x : -baseScale.x, // Si 'right' es true, usa X. Si es false, usa -X
+            baseScale.y, 
+            baseScale.z
+        );
+
+        // ¡Asegúrate de que YA NO HAY NADA aquí que toque 'sr.flipX'!
+        // ¡Asegúrate de que YA NO HAY NADA aquí que toque 'boxCollider.offset'!
     }
 
-    private void FlipTowardsPlayer()
+    void FlipFacing()
     {
-        float directionToPlayer = player.position.x - transform.position.x;
-        if ((directionToPlayer > 0 && transform.localScale.x < 0) || (directionToPlayer < 0 && transform.localScale.x > 0))
-        {
-            Vector3 localScale = transform.localScale;
-            localScale.x *= -1;
-            transform.localScale = localScale;
-        }
+        SetFacing(!facingRight);
     }
-
-    private void OnDrawGizmosSelected()
+    
+    // Dibuja los círculos de rango en el Editor
+    void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, detectionRange);
+        Gizmos.DrawWireSphere(transform.position, detectionRadius);
         Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, attackRange);
-        if (attackPoint != null)
-        {
-            Gizmos.color = Color.cyan;
-            Gizmos.DrawWireSphere(attackPoint.position, attackRadius);
-        }
+        Transform center = (attackOrigin != null) ? attackOrigin : transform;
+        Gizmos.DrawWireSphere(center.position, attackRange);
     }
 }

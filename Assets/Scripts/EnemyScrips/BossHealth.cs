@@ -1,140 +1,136 @@
 using UnityEngine;
 using System.Collections;
+using UnityEngine.UI; 
 
 public class BossHealth : MonoBehaviour
 {
-    [Header("Vida y daño")]
-    public int health = 50;
-    public int damageTaken = 2; // Daño que recibe por golpe del jugador
-    public bool isDamaged = false;
+    // --- ¡¡LÓGICA DE VIDA CORREGIDA!! ---
+    [Header("Health")]
+    public int maxHealth = 50; // Pon aquí la vida máxima
+    private int currentHealth; // La vida actual (privada)
+    // ------------------------------------
 
     [Header("Lógica Metroidvania")]
     public GameObject barrierToUnlock;
-    public float deathDelay = 2f;
+    public float deathDelay = 2f; 
 
-    [Header("Feedback visual")]
-    public float damageCooldown = 0.3f;
-    public GameObject deathEffect;
-    public Material blinkMaterial;
-    private Material originalMaterial;
-
-    // Referencias internas
+    [Header("UI")]
+    public Image healthBarFill; 
+    
     private Animator anim;
     private bool isDead = false;
-    private SpriteRenderer sprite;
+    private bool isDamaged = false; 
     private Rigidbody2D rb;
 
     void Start()
     {
         anim = GetComponent<Animator>();
-        sprite = GetComponent<SpriteRenderer>();
-        rb = GetComponent<Rigidbody2D>();
-
-        if (sprite != null)
-            originalMaterial = sprite.material;
-
+        rb = GetComponent<Rigidbody2D>(); 
+        
+        // --- ¡¡INICIALIZADOR DE VIDA AÑADIDO!! ---
+        currentHealth = maxHealth; // ¡Empieza con la vida al máximo!
+        // ----------------------------------------
+        
         if (barrierToUnlock != null)
-            barrierToUnlock.SetActive(true);
-    }
-
-    // ==========================================
-    // ⚔️ Detecta colisiones con el arma del jugador
-    // ==========================================
-    private void OnTriggerEnter2D(Collider2D collision)
-    {
-        if (collision.CompareTag("Weapon") && !isDamaged && !isDead)
         {
-            // Llamamos a TakeDamage con el daño base del jugador
-            TakeDamage(damageTaken);
+            barrierToUnlock.SetActive(true);
+        }
 
-            // Knockback dependiendo del lado del golpe
-            if (rb != null)
-            {
-                if (collision.transform.position.x < transform.position.x)
-                    rb.AddForce(new Vector2(4f, 2f), ForceMode2D.Impulse);
-                else
-                    rb.AddForce(new Vector2(-4f, 2f), ForceMode2D.Impulse);
-            }
+        if (healthBarFill != null)
+        {
+            healthBarFill.fillAmount = 1f; 
         }
     }
 
-    // ==========================================
-    // ❤️ Recibir daño (público por si el HeroKnight lo llama)
-    // ==========================================
+    // Esta función detecta tu arma (Tag "Weapon")
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        if (isDead) return; 
+
+        if (collision.CompareTag("Weapon") && !isDamaged)
+        {
+            // (Ajusta '2' al daño de tu arma si quieres)
+            TakeDamage(2); 
+        }
+    }
+
+    // Esta función maneja la lógica de recibir daño
     public void TakeDamage(int damage)
     {
         if (isDead) return;
 
-        health -= damage;
-        Debug.Log($"Boss recibió daño, vida restante: {health}");
+        currentHealth -= damage; // Usa la variable 'currentHealth'
+        isDamaged = true; 
+        Debug.Log("Boss recibió daño, vida restante: " + currentHealth);
 
-        if (health <= 0)
+        if (healthBarFill != null)
+        {
+            // Usa 'currentHealth' y 'maxHealth'
+            healthBarFill.fillAmount = (float)currentHealth / maxHealth;
+        }
+
+        StartCoroutine(Damager()); 
+
+        if (currentHealth <= 0) // Comprueba 'currentHealth'
         {
             Die();
         }
-        else
+        else if (anim != null)
         {
-            if (anim != null)
-                anim.SetTrigger("Hit_Boss");
-
-            StartCoroutine(DamageBlink());
+            anim.SetTrigger("Hurt"); 
         }
     }
-
-    // ==========================================
-    // 💀 Muerte del jefe
-    // ==========================================
+ 
     void Die()
     {
+        if (isDead) return; 
         isDead = true;
         Debug.Log("¡Boss derrotado!");
+
+        if (healthBarFill != null)
+        {
+            if (healthBarFill.transform.parent != null)
+                healthBarFill.transform.parent.gameObject.SetActive(false); 
+        }
 
         Collider2D col = GetComponent<Collider2D>();
         if (col != null) col.enabled = false;
 
-        if (anim != null)
-            anim.SetTrigger("Dead_Boss");
-
-        // Efecto visual de muerte
-        if (deathEffect != null)
-            Instantiate(deathEffect, transform.position, Quaternion.identity);
-
-        // Desactiva IA si existe
-        BossAI aiScript = GetComponent<BossAI>();
+        SamuraiBoss_AI aiScript = GetComponent<SamuraiBoss_AI>();
         if (aiScript != null)
-            aiScript.enabled = false;
+        {
+            aiScript.enabled = false; 
+        }
 
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+            rb.isKinematic = true; // <-- Esta línea AHORA solo se ejecuta al morir
+        }
+
+        if (anim != null)
+        {
+            anim.SetTrigger("Death");
+        }
+     
         StartCoroutine(UnlockPathAfterDelay());
     }
 
-    // ==========================================
-    // ✨ Efecto visual al recibir daño
-    // ==========================================
-    IEnumerator DamageBlink()
-    {
-        isDamaged = true;
-
-        if (sprite != null && blinkMaterial != null)
-            sprite.material = blinkMaterial;
-
-        yield return new WaitForSeconds(damageCooldown);
-
-        if (sprite != null)
-            sprite.material = originalMaterial;
-
-        isDamaged = false;
-    }
-
-    // ==========================================
-    // 🚪 Desbloquear el camino después de morir
-    // ==========================================
     private IEnumerator UnlockPathAfterDelay()
     {
-        yield return new WaitForSeconds(deathDelay);
-
+        yield return new WaitForSeconds(deathDelay); 
+        
         if (barrierToUnlock != null)
+        {
             barrierToUnlock.SetActive(false);
+        }
+        
+        Destroy(gameObject); 
+    }
 
-        Destroy(gameObject, 1f);
+    IEnumerator Damager()
+    {
+        yield return new WaitForSeconds(0.3f); 
+        isDamaged = false;
     }
 }

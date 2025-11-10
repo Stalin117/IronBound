@@ -1,128 +1,121 @@
 using UnityEngine;
-using System.Collections;
 
 public class BossAI : MonoBehaviour
 {
-    [Header("Movimiento")]
     public float speed = 2f;
-    public float chaseRange = 6f;
-    public float attackRange = 1.8f;
-    public LayerMask groundLayer;
-
-    [Header("Ataque")]
-    public int damageToPlayer = 1;
-    public float attackCooldown = 2f;
-    private bool canAttack = true;
-
-    [Header("Referencias")]
+    public float detectionRange = 8f; // rango para detectar al jugador
     public Transform player;
     public Transform groundCheck;
+    public float groundCheckRadius = 0.2f;
+    public LayerMask groundLayer;
     public Transform wallCheck;
+    public float wallCheckDistance = 0.3f;
+    public LayerMask wallLayer;
 
-    private Rigidbody2D rb;
+    public Vector2 zoneMinMax = new Vector2(-5f, 5f); // límites del área donde puede moverse (X min, X max)
+    
     private Animator anim;
+    private Rigidbody2D rb;
     private bool isFacingRight = true;
+    private bool isGrounded;
     private bool isDead = false;
-    private BossHealth bossHealth;
+
+    private Vector3 startPosition;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
-        bossHealth = GetComponent<BossHealth>();
-
-        if (player == null)
-            player = GameObject.FindGameObjectWithTag("Player")?.transform;
+        startPosition = transform.position; // punto de origen del boss
     }
 
     void Update()
     {
-        if (bossHealth != null && bossHealth.health <= 0)
+        if (isDead) return;
+
+        // Revisar si el boss está tocando el suelo
+        isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+
+        // Revisar si hay pared enfrente
+        bool hittingWall = Physics2D.Raycast(wallCheck.position, transform.right, wallCheckDistance, wallLayer);
+
+        // Revisar si el jugador está cerca
+        if (player != null)
         {
-            isDead = true;
-            rb.linearVelocity = Vector2.zero;
-            return;
-        }
+            float distanceToPlayer = Vector2.Distance(transform.position, player.position);
 
-        if (player == null || isDead) return;
-
-        float distance = Vector2.Distance(transform.position, player.position);
-
-        if (distance <= attackRange)
-        {
-            if (canAttack)
-                StartCoroutine(Attack());
-            rb.linearVelocity = Vector2.zero;
-            anim.SetBool("isWalking", false);
-        }
-        else if (distance <= chaseRange)
-        {
-            ChasePlayer();
-        }
-        else
-        {
-            rb.linearVelocity = Vector2.zero;
-            anim.SetBool("isWalking", false);
-        }
-    }
-
-    void ChasePlayer()
-    {
-        anim.SetBool("isWalking", true);
-
-        if (player.position.x > transform.position.x)
-        {
-            rb.linearVelocity = new Vector2(speed, rb.linearVelocity.y);
-            if (!isFacingRight) Flip();
-        }
-        else
-        {
-            rb.linearVelocity = new Vector2(-speed, rb.linearVelocity.y);
-            if (isFacingRight) Flip();
-        }
-
-        bool noGround = !Physics2D.Raycast(groundCheck.position, Vector2.down, 1f, groundLayer);
-        bool wallAhead = Physics2D.Raycast(wallCheck.position, isFacingRight ? Vector2.right : Vector2.left, 0.3f, groundLayer);
-
-        if (noGround || wallAhead)
-        {
-            rb.linearVelocity = Vector2.zero;
-        }
-    }
-
-    IEnumerator Attack()
-    {
-        canAttack = false;
-        rb.linearVelocity = Vector2.zero;
-
-        // Elegimos aleatoriamente Attack1 o Attack2
-        int attackType = Random.Range(0, 2);
-        string triggerName = attackType == 0 ? "Attack1" : "Attack2";
-        anim.SetTrigger(triggerName);
-
-        // Esperar al frame del golpe
-        yield return new WaitForSeconds(0.5f);
-
-        // Comprobar si el jugador sigue cerca
-        if (player != null && Vector2.Distance(transform.position, player.position) <= attackRange + 0.3f)
-        {
-            PlayerMovement playerScript = player.GetComponent<PlayerMovement>();
-            if (playerScript != null)
+            // Solo atacar si está dentro de la zona designada
+            if (distanceToPlayer < detectionRange && 
+                player.position.x > zoneMinMax.x + startPosition.x && 
+                player.position.x < zoneMinMax.y + startPosition.x)
             {
-                playerScript.TakeDamage(damageToPlayer);
-                Debug.Log($"⚔️ Boss realizó {triggerName} al jugador!");
+                ChasePlayer(hittingWall);
+            }
+            else
+            {
+                ReturnToStart();
             }
         }
+    }
 
-        yield return new WaitForSeconds(attackCooldown);
-        canAttack = true;
+    void ChasePlayer(bool hittingWall)
+    {
+        if (isGrounded && !hittingWall)
+        {
+            anim.SetBool("isWalking", true);
+            float direction = player.position.x - transform.position.x;
+            rb.linearVelocity = new Vector2(Mathf.Sign(direction) * speed, rb.linearVelocity.y);
+
+            // Voltear sprite
+            if (direction > 0 && !isFacingRight) Flip();
+            else if (direction < 0 && isFacingRight) Flip();
+        }
+        else
+        {
+            anim.SetBool("isWalking", false);
+            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+        }
+    }
+
+    void ReturnToStart()
+    {
+        float distance = Vector2.Distance(transform.position, startPosition);
+
+        if (distance > 0.2f)
+        {
+            anim.SetBool("isWalking", true);
+            float direction = startPosition.x - transform.position.x;
+            rb.linearVelocity = new Vector2(Mathf.Sign(direction) * speed, rb.linearVelocity.y);
+
+            if (direction > 0 && !isFacingRight) Flip();
+            else if (direction < 0 && isFacingRight) Flip();
+        }
+        else
+        {
+            anim.SetBool("isWalking", false);
+            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+        }
     }
 
     void Flip()
     {
         isFacingRight = !isFacingRight;
-        Vector3 scale = transform.localScale;
-        scale.x *= -1;
-        transform.localScale = scale;
+        transform.localScale = new Vector3(-transform.localScale.x, transform.localScale.y, transform.localScale.z);
+    }
+
+    // Llamado desde BossHealth cuando muere
+    public void Die()
+    {
+        isDead = true;
+        rb.linearVelocity = Vector2.zero;
+        anim.SetBool("isWalking", false);
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        // Dibujar límites de zona
+        Gizmos.color = Color.red;
+        Gizmos.DrawLine(new Vector3(startPosition.x + zoneMinMax.x, startPosition.y, 0),
+                        new Vector3(startPosition.x + zoneMinMax.y, startPosition.y, 0));
     }
 }

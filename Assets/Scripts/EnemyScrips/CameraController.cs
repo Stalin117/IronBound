@@ -2,39 +2,40 @@ using UnityEngine;
 
 public class CameraController : MonoBehaviour
 {
-    [Tooltip("Assign the player's Transform here. If left empty, the script will try to find a GameObject with tag 'Player'.")]
-    public Transform player; // Referencia al jugador
-    
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
-    {
-        
-    }
+    public Transform player; // Arrastra tu 'HeroKnight' aquí
 
-    void Awake()
+    [Header("Posición de la Cámara (Offsets)")]
+    public float offsetY = 1.5f; // Sube esto para ver más el suelo
+    public float offsetX = 1f;   // Sube esto para mover la cámara a la derecha
+    
+    [Header("Suavizado")]
+    public float smoothSpeed = 0.3f; // Qué tan rápido sigue la cámara (más bajo = más lento)
+
+    private Vector3 velocity = Vector3.zero;
+
+    // Usamos LateUpdate para asegurarnos de que el jugador
+    // ya se ha movido este frame.
+    void LateUpdate()
     {
-        // If player not assigned in inspector, try to find by tag to avoid UnassignedReferenceException
+        // Si no hay jugador asignado, no hacer nada.
         if (player == null)
         {
-            var playerObj = GameObject.FindWithTag("Player");
-            if (playerObj != null)
-            {
-                player = playerObj.transform;
-                Debug.Log("CameraController: auto-assigned player by tag 'Player'.");
-            }
-            else
-            {
-                Debug.LogWarning("CameraController: 'player' is not assigned in the inspector and no GameObject with tag 'Player' was found. Please assign it to avoid errors.");
-            }
+            return;
         }
-    }
 
-    // Update is called once per frame
-    void Update()
-    {
-        if (player == null)
-            return; // avoid NullReferenceException if player still isn't assigned
+        // 1. Calcula la posición a la que la cámara QUIERE ir
+        Vector3 desiredPosition = new Vector3(
+            player.position.x + offsetX,  // Posición del jugador + offset en X
+            player.position.y + offsetY,  // Posición del jugador + offset en Y
+            transform.position.z          // Mantiene la posición Z original de la cámara
+        );
 
-        transform.position = new Vector3(player.position.x, player.position.y, transform.position.z);
+        // 2. Mueve la cámara suavemente a esa posición
+        transform.position = Vector3.SmoothDamp(
+            transform.position, // Desde dónde se mueve
+            desiredPosition,    // Hacia dónde se mueve
+            ref velocity,       // (Variable interna para el cálculo)
+            smoothSpeed         // El tiempo que tarda en llegar
+        );
     }
 }
