@@ -7,7 +7,7 @@ using UnityEngine.UI;
 [RequireComponent(typeof(Animator))]
 public class SamuraiBoss_AI : MonoBehaviour
 {
-    public enum State { Patrol, Chase, Attack, Block, Idle, Dead }
+    public enum State { Patrol, Chase, Attack, Block, Hurt, Idle, Dead }
 
     [Header("Referencias (¡Asignar!)")]
     public Enemy enemy;
@@ -27,21 +27,18 @@ public class SamuraiBoss_AI : MonoBehaviour
     public float detectionRadius = 6f;
     public float attackRadius = 1f;
     public float patrolSpeedMultiplier = 0.6f;
-    public float attackCooldown = 1.2f;
+    public float attackCooldown = 1.2f; // Cooldown DESPUÉS de atacar o bloquear
     public float attackDelay = 0.1f;
     public float attackRange = 0.6f;
-
-    [Header("Blocking")]
-    [Range(0, 1)]
-    public float blockChance = 0.3f; // 30% chance de bloquear
-    public float blockDuration = 1.5f;
-    private bool isBlocking = false;
-
+    public float blockDuration = 1.5f; // Cuánto dura un bloqueo
+    public float hurtDuration = 0.5f; // Cuánto dura el "Hurt"
+    
     // Estados Internos
     private Rigidbody2D rb;
     private SpriteRenderer sr;
     private State currentState = State.Patrol;
-    private bool canAttack = true;
+    private bool canAttack = true; // Controla el cooldown
+    private bool isBlocking = false;
     private bool facingRight;
     private Vector3 baseScale;
 
@@ -63,7 +60,8 @@ public class SamuraiBoss_AI : MonoBehaviour
 
     void Update()
     {
-        if (currentState == State.Dead || isBlocking) return;
+        // Si está en una acción (Bloqueando, Herido, Muerto), el "cerebro" se pausa.
+        if (isBlocking || currentState == State.Hurt || currentState == State.Dead) return;
         
         if (player == null)
         {
@@ -89,22 +87,14 @@ public class SamuraiBoss_AI : MonoBehaviour
             }
         }
 
+        // --- LÓGICA DE IA AGRESIVA ---
         if (distToPlayer <= attackRadius)
         {
-            if (canAttack)
+            if (canAttack) // Si el cooldown terminó
             {
-                float randomChoice = Random.Range(0f, 1f);
-                if (randomChoice < blockChance)
-                {
-                    currentState = State.Block;
-                    StartCoroutine(BlockRoutine()); 
-                }
-                else
-                {
-                    currentState = State.Attack;
-                }
+                currentState = State.Attack; // ¡Siempre ataca!
             }
-            else 
+            else // Si está en cooldown
             {
                 currentState = State.Idle;
             }
@@ -117,6 +107,7 @@ public class SamuraiBoss_AI : MonoBehaviour
         {
             currentState = State.Patrol;
         }
+        // --- FIN DE LA LÓGICA ---
 
         if (animator != null)
         {
@@ -126,7 +117,6 @@ public class SamuraiBoss_AI : MonoBehaviour
             else if (ParameterExists(animator, "Idle"))
                 animator.SetBool("Idle", !isMoving);
             
-            // Setea el bool de bloqueo (con "I" mayúscula)
             animator.SetBool("IsBlocking", isBlocking);
         }
     }
@@ -141,6 +131,7 @@ public class SamuraiBoss_AI : MonoBehaviour
             case State.Chase: HandleChase(); break;
             case State.Attack: HandleAttack(); break;
             case State.Block: HandleBlock(); break; 
+            case State.Hurt: HandleHurt(); break;
             case State.Idle:
             case State.Dead:
             default:
@@ -148,7 +139,8 @@ public class SamuraiBoss_AI : MonoBehaviour
                 break;
         }
     }
-
+    
+    // --- FUNCIONES DE ESTADO ---
     void HandlePatrol()
     {
         float spd = (enemy != null) ? enemy.speed * patrolSpeedMultiplier : 1f;
@@ -185,18 +177,36 @@ public class SamuraiBoss_AI : MonoBehaviour
         rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
         LookAtPlayer();
     }
-
-    void LookAtPlayer()
+    
+    void HandleHurt()
     {
-        if (player == null) return;
-        float directionToPlayer = player.position.x - transform.position.x;
-        if (directionToPlayer > 0.1f) { SetFacing(true); }
-        else if (directionToPlayer < -0.1f) { SetFacing(false); }
+        rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
     }
+    
+    // --- FUNCIONES PÚBLICAS (Llamadas por BossHealth) ---
+    
+    public void StartBlock()
+    {
+        currentState = State.Block;
+        StartCoroutine(BlockRoutine());
+    }
+
+    public void GotHit()
+    {
+        currentState = State.Hurt;
+        StartCoroutine(HurtRoutine());
+    }
+    
+    public bool IsBlocking()
+    {
+        return isBlocking;
+    }
+    
+    // --- CORUTINAS ---
 
     IEnumerator PerformAttack()
     {
-        canAttack = false;
+        canAttack = false; // Inicia cooldown
         animator?.SetTrigger("Attack"); 
         yield return new WaitForSeconds(attackDelay);
 
@@ -209,24 +219,29 @@ public class SamuraiBoss_AI : MonoBehaviour
                 ph.TakeDamage(enemy != null ? enemy.damageToGive : 1);
         }
         
-        StartCoroutine(ActionCooldownRoutine());
+        StartCoroutine(ActionCooldownRoutine()); // Espera el cooldown
     }
 
-    // --- ¡CORREGIDO! ---
-    // Esta corutina ahora solo usa el Bool 'isBlocking'
     IEnumerator BlockRoutine()
     {
         isBlocking = true;
-        canAttack = false; 
-        
-        // La línea "SetTrigger("Protection")" ha sido eliminada
+        canAttack = false; // Inicia cooldown
         
         yield return new WaitForSeconds(blockDuration); 
         
         isBlocking = false;
-        currentState = State.Idle; 
+        currentState = State.Idle; // Vuelve a 'Idle' para re-evaluar
         
-        StartCoroutine(ActionCooldownRoutine());
+        StartCoroutine(ActionCooldownRoutine()); // Espera el cooldown
+    }
+    
+    private IEnumerator HurtRoutine()
+    {
+        // Espera a que termine la animación de "Hurt"
+        yield return new WaitForSeconds(hurtDuration);
+        
+        // Vuelve a 'Idle' para re-evaluar (¡y volver a atacar!)
+        currentState = State.Idle; 
     }
     
     IEnumerator ActionCooldownRoutine()
@@ -235,9 +250,14 @@ public class SamuraiBoss_AI : MonoBehaviour
         canAttack = true;
     }
 
-    public bool IsBlocking()
+    // --- FUNCIONES DE AYUDA ---
+
+    void LookAtPlayer()
     {
-        return isBlocking;
+        if (player == null) return;
+        float directionToPlayer = player.position.x - transform.position.x;
+        if (directionToPlayer > 0.1f) { SetFacing(true); }
+        else if (directionToPlayer < -0.1f) { SetFacing(false); }
     }
 
     void SetFacing(bool right)
