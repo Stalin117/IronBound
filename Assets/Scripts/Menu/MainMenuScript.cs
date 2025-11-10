@@ -21,10 +21,7 @@ public class MainMenuScript : MonoBehaviour
 
     public void StartGame()
     {
-        // Le dice al 'Level 1' que debe mostrar el tutorial al cargar
-        TutorialManager.s_ShowTutorialOnLoad = true;
-        
-        // Carga la escena (asumiendo que 'Level 1' es el índice 1)
+        // Ensure time is running (in case it was paused by a pause menu)
         SceneManager.LoadScene(1);
     }
 
